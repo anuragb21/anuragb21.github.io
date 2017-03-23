@@ -1,0 +1,129 @@
+'use strict'; //treat silly mistakes as run-time errors
+  
+  /* YOUR CODE GOES HERE! */
+ +'use strict'; //treat silly mistakes as run-time errors
+ +
+ +var globalTweets = []; // a global variable to store tweets in the form of array of JavaScript objects. To be used for sorting later on
+ +function parseTweets(twts) 
+ +{
+ +    var twts_array = [];
+ +    for(var i=0; i<twts.statuses.length; i++ ) // 
+ +    {
+ +        var twt_obj = {}; // JavaScript Object to store tweet information
+ +        twt_obj.created_at = twts.statuses[i].created_at;
+ +        twt_obj.username = twts.statuses[i].user.screen_name;
+ +        twt_obj.text= twts.statuses[i].text;
+ +        twt_obj.hashtags = []; 
+ +        for(var j=0; j<twts.statuses[i].entities.hashtags.length; j++) {
+ +            twt_obj.hashtags.push(twts.statuses[i].entities.hashtags[j].text);
+ +        }
+ +        twt_obj.retweet_count = twts.statuses[i].retweet_count;
+ +        twts_array.push(twt_obj);        //push each tweet object into the tweets array
+ +    }
+ +    globalTweets = twts_array; //Copy the tweets array into global variable
+ +    return twts_array;
+ +}
+ +
+ +
+ +function loadTweets(Filename)
+ +{
+ +   var p = $.getJSON(Filename).then(function(data) {  //Fetch the tweets asynchronously & call parseTweets function to parse the tweets
+ +   return parseTweets(data)
+ +   });
+ +   return p;// Returns parsed tweets   
+ +}
+ +
+ +
+ +function showTweets(twts_array)
+ +{
+ +    $('#tweetTable').empty(); // remove previous data from tweets table
+ +    for(var i=0; i<twts_array.length; i++) //Iterate through tweets array and append all the tweets to tweets table
+ +    {
+ +        var created_at = new Date(twts_array[i].created_at); //Convert created at into date format
+ +        
+ +        $('#tweetTable').append('<tr><td>'+twts_array[i].username+'</td><td>'  
+ +        +created_at.toUTCString()+'</td> <td>'+twts_array[i].text+'</td> <td>'+
+ +        twts_array[i].hashtags.join(', ')+'</td> <td>'+twts_array[i].retweet_count+
+ +        '</td><td>' + twts_array[i].sentiments+'</td></tr>')    
+ +    }
+ +}
+ +
+ +function loadSentiments(sentimentFile)  
+ +{
+ +    return $.get(sentimentFile).then(function(data){  //load the external sentiment file
+ +        var sentimentObj = {};
+ +        var lines = data.split('\r\n');  //split the whole file to lines
+ +        for(var i=0; i<lines.length; i++){
+ +            var word_list = lines[i].split(',');   //split each line to word and its sentiment value to create a word list
+ +            sentimentObj[word_list[0]] = parseInt(word_list[1]);
+ +        }
+ +        return sentimentObj;
+ +    })
+ +}
+ +
+ +function textSentiment(text, sentimentObj) 
+ +{
+ +  
+ +    var sentiment_score = 0
+ +    var words = text.split(/[^\w\']/).filter(function(el) {return el.length != 0}); //Split input string into words, filter out empty substrings
+ +    var wordlen = words.length
+ +    for(var i=0;i<wordlen;i++){
+ +        if(words[i] in sentimentObj){
+ +            sentiment_score = sentiment_score + sentimentObj[words[i]] //Compute sentiment score of the complete input string
+ +        }
+ +    }
+ +  //console.log(sentiment_score)
+ +    return sentiment_score 
+ +}
+ +
+ +
+ +function tweetSentiments(tweetFile, sentimentFile)
+ +{
+ +   var tweets = loadTweets(tweetFile); //load and parse the tweet file asynchronously
+ +   var sentiments = loadSentiments(sentimentFile); //load and parse the sentiment file asynchronously
+ +   $.when(tweets, sentiments).then(function(tweetData, sentiData){ //Calculate the sentiment score of the tweets
+ +       for(var i=0; i<tweetData.length; i++){
+ +           var tweet = tweetData[i].text.toLowerCase();
+ +           var sentiScore = textSentiment(tweet, sentiData)
+ +           tweetData[i].sentiments = sentiScore;
+ +       //console.log(tweetData[i].sentiments)
+ +       }
+ +       showTweets(tweetData); //Show tweets in the tweets table
+ +       
+ +   }) 
+ +}
+ +
+ +$('#searchButton').click(function(){   
+ +    var searchTerm = $('#searchBox').val();
+ +    var url = 'http://faculty.washington.edu/joelross/search-tweets-proxy/?q='+searchTerm+'&count=100';  //Fetch tweets data through API
+ +    tweetSentiments(url, 'data/AFINN-111.csv'); //Call tweet sentiments function based on user's input
+ +    
+ +})
+ +
+ +/*
+ +Code for sorting the array of JavaScript objects is referred from below StackOverflow post:
+ +http://stackoverflow.com/questions/979256/sorting-an-array-of-javascript-objects
+ +*/
+ +$('.col-md-2').click(function(){  //Sort tweets by username
+ +    globalTweets.sort(function(b, a){
+ +        return (a.username > b.username) - (a.username < b.username);
+ +    })
+ +    showTweets(globalTweets);
+ +    
+ +})
+ +
+ +$('#sentimentHeader').click(function(){ //Sort tweets by sentiment score
+ +    globalTweets.sort(function(b, a){
+ +        return parseFloat(a.sentiments)-parseFloat(b.sentiments);   
+ +    })
+ +    showTweets(globalTweets);
+ +    
+ +})
+ +
+ +$('#retweetHeader').click(function(){ //Sort tweets by retweet count
+ +    globalTweets.sort(function(b, a){
+ +        return parseFloat(a.retweet_count)-parseFloat(b.retweet_count);   
+ +    })
+ +    showTweets(globalTweets);
+ +    
+ +}) 
